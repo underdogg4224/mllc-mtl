@@ -96,7 +96,6 @@ import jdehorty/KernelFunctions/2 as kernels
 //
 //       Figure 2: Neighborhood in Lorentzian Space 
 
-
 // Observations:
 // (1) In Lorentzian Space, the shortest distance between two points is not 
 //     necessarily a straight line, but rather, a geodesic curve.
@@ -286,62 +285,45 @@ Label direction =
    neutral=0
   )
 
+abs(x) => x < 0 ? -x : x
+
 // Derived from General Settings
 maxBarsBackIndex = last_bar_index >= settings.maxBarsBack ? last_bar_index - settings.maxBarsBack : 0
 
 // Moving Average Settings
 ma1 = input.bool(true, "MA 1", group="Moving Average Settings", inline="movingAverage1")
-ma1Type = input.string("EMA", "", options=["EMA", "HMA", "SMA", "WMA", "DEMA", "TEMA", "TRIMA", "VWMA", "ZLEMA"], group="Moving Average Settings", inline="movingAverage1")
-ma1Length = input.int(20, "L", group="Moving Average Settings", inline="movingAverage1")
-ma1Resolution = input.timeframe("D", "RES", group="Moving Average Settings", inline="movingAverage1")
+ma1Type = input.string("HMA", "", options=["EMA", "HMA", "SMA", "WMA", "DEMA", "TEMA", "TRIMA", "VWMA", "ZLEMA"], group="Moving Average Settings", inline="movingAverage1")
+ma1Length = input.int(9, "L", group="Moving Average Settings", inline="movingAverage1")
+ma1Resolution = input.timeframe("", "RES", group="Moving Average Settings", inline="movingAverage1")
 
 ma2 = input.bool(true, "MA 2", group="Moving Average Settings", inline="movingAverage2")
-ma2Type = input.string("EMA", "", options=["EMA", "HMA", "SMA", "WMA", "DEMA", "TEMA", "TRIMA", "VWMA", "ZLEMA"], group="Moving Average Settings", inline="movingAverage2")
-ma2Length = input.int(50, "L", group="Moving Average Settings", inline="movingAverage2")
-ma2Resolution = input.timeframe("D", "RES", group="Moving Average Settings", inline="movingAverage2")
+ma2Type = input.string("HMA", "", options=["EMA", "HMA", "SMA", "WMA", "DEMA", "TEMA", "TRIMA", "VWMA", "ZLEMA"], group="Moving Average Settings", inline="movingAverage2")
+ma2Length = input.int(20, "L", group="Moving Average Settings", inline="movingAverage2")
+ma2Resolution = input.timeframe("", "RES", group="Moving Average Settings", inline="movingAverage2")
 
-getMovingAverage(type, src, len) => type == "EMA" ? ta.ema(src, len) : type == "HMA" ? ta.hma(src, len) : type == "SMA" ? ta.sma(src, len) : type == "WMA" ? ta.wma(src, len) : type == "DEMA" ? 2 * ta.ema(src, len) - ta.ema(ta.ema(src, len), len) : type == "TEMA" ? 3 * ta.ema(src, len) - 3 * ta.ema(ta.ema(src, len), len) + ta.ema(ta.ema(ta.ema(src, len), len), len) : type == "TRIMA" ? (ta.sma(src, len) + ta.sma(ta.sma(src, len), len)) / 2 : type == "VWMA" ? ta.vwma(src, len) : type == "ZLEMA" ? (2 * close - ta.ema(close, 2 * len - 1)) / 2 : na
+minMASeparationPercent = input.float(0.5, "Minimum MA Separation (%)", step = 0.05, group="Moving Average Settings") / 100
 
-// Calculate Moving Averages
-ma1Value = ma1 ? getMovingAverage(ma1Type, close, ma1Length) : na
-ma2Value = ma2 ? getMovingAverage(ma2Type, close, ma2Length) : na
-
-// Moving Average Filters
-isFilter1Uptrend = ma1 ? (close > ma1Value) : true
-isFilter1Downtrend = ma1 ? (close < ma1Value) : true
-isFilter2Uptrend = ma2 ? (close > ma2Value) : true
-isFilter2Downtrend = ma2 ? (close < ma2Value) : true
-
-import ta
-import numpy as np
-import tensorflow as tf
-
-// Define the buy and sell signals based on moving average crossover
-moving_average_crossover_strategy(prices, resolution, fast_window, slow_window) =>
-    prices = adjust_resolution(prices, resolution)
-    fast_ma = ta.sma(prices, fast_window)
-    slow_ma = ta.sma(prices, slow_window)
-
-    buy_signal = crossover(fast_ma, slow_ma)
-    sell_signal = crossunder(fast_ma, slow_ma)
-
-    [buy_signal, sell_signal]
-
+getMovingAverage(type, src, len) => type == "EMA" ? ta.ema(src, len) : type == "HMA" ? ta.hma(src, len) : type == "SMA" ? ta.sma(src, len) : type == "WMA" ? ta.wma(src, len) : type == "DEMA" ? 2 * ta.ema(src, len) - ta.ema(ta.ema(src, len), len) : type == "TEMA" ? 3 * ta.ema(src, len) - 3 * ta.ema(ta.ema(src, len), len) + ta.ema(ta.ema(ta.ema(src, len), len), len) : type == "TRIMA" ? (ta.sma(src, len) + ta.sma(ta.sma(src, len), len)) / 2 : type == "VWMA" ? ta.vwma(src, len) : type == "ZLEMA" ? (2 * src - ta.ema(src, 2 * len - 1)) / 2 : na
 
 // Calculate Moving Averages
-ma1Value = ma1 ? getMovingAverage(ma1Type, close, ma1Length) : na
-ma2Value = ma2 ? getMovingAverage(ma2Type, close, ma2Length) : na
+ma1Value = request.security(syminfo.tickerid, ma1Resolution, getMovingAverage(ma1Type, close, ma1Length))
+ma2Value = request.security(syminfo.tickerid, ma2Resolution, getMovingAverage(ma2Type, close, ma2Length))
+
+// Calculating minimum separation in price terms
+minMASeparation = minMASeparationPercent * close
+
+// Calculate the absolute difference between MA1 and MA2
+maSeparation = abs(ma1Value - ma2Value)
 
 // Moving Average Filters
-isFilter1Uptrend = ma1 ? (close > ma1Value) : true
-isFilter1Downtrend = ma1 ? (close < ma1Value) : true
-isFilter2Uptrend = ma2 ? (close > ma2Value) : true
-isFilter2Downtrend = ma2 ? (close < ma2Value) : true
+isFilter1Uptrend = ma1 and ma2 ? (ma1Value > ma2Value and maSeparation > minMASeparation) : true
+isFilter1Downtrend = ma1 and ma2 ? (ma1Value < ma2Value and maSeparation > minMASeparation) : true
+isFilter2Uptrend = isFilter1Uptrend
+isFilter2Downtrend = isFilter1Downtrend
 
-// Plots
-plot(isFilter1Uptrend and isFilter2Uptrend ? close : na, color=color.green, title="Uptrend")
-plot(isFilter1Downtrend and isFilter2Downtrend ? close : na, color=color.red, title="Downtrend")
-
+// Plotting
+plot(isFilter1Uptrend ? close : na, color=color.green, title="Uptrend")
+plot(isFilter1Downtrend ? close : na, color=color.red, title="Downtrend")
 
 // Nadaraya-Watson Kernel Regression Settings
 useKernelFilter = input.bool(true, "Trade with Kernel", group="Kernel Settings", inline="kernel")
@@ -353,7 +335,7 @@ x = input.int(25, "Regression Level", tooltip='Bar index on which to start regre
 lag = input.int(2, "Lag", tooltip="Lag for crossover detection. Lower values result in earlier crossovers. Recommended range: 1-2", inline='1', group='Kernel Settings')
 
 // Display Settings
-showBarColors = input.bool(true, "Show Bar Colors", tooltip="Whether to show the bar colors.", group="Display Settings")
+showBarColors = input.bool(false, "Show Bar Colors", tooltip="Whether to show the bar colors.", group="Display Settings")
 showBarPredictions = input.bool(defval = true, title = "Show Bar Prediction Values", tooltip = "Will show the ML model's evaluation of each bar as an integer.", group="Display Settings")
 useAtrOffset = input.bool(defval = false, title = "Use ATR Offset", tooltip = "Will use the ATR offset instead of the bar prediction offset.", group="Display Settings")
 barPredictionsOffset = input.float(0, "Bar Prediction Offset", minval=0, tooltip="The offset of the bar predictions as a percentage from the bar high or close.", group="Display Settings")
@@ -468,7 +450,6 @@ isLastSignalSell = signal[4] == direction.short and isFilter1Downtrend[4] and is
 isNewBuySignal = isBuySignal and isDifferentSignalType
 isNewSellSignal = isSellSignal and isDifferentSignalType
 
-
 // Kernel Regression Filters: Filters based on Nadaraya-Watson Kernel Regression using the Rational Quadratic Kernel
 // For more information on this technique refer to my other open source indicator located here: 
 // https://www.tradingview.com/script/AWNvbPRM-Nadaraya-Watson-Rational-Quadratic-Kernel-Non-Repainting/
@@ -507,8 +488,8 @@ isBearish = useKernelFilter ? (useKernelSmoothing ? isBearishSmooth : isBearishR
 // ===========================
 
 // Entry Conditions
-startLongTrade = isNewBuySignal and isBullish and isFilter1Uptrend and isFilter2Uptrend
-startShortTrade = isNewSellSignal and isBearish and isFilter1Downtrend and isFilter2Downtrend
+startLongTrade = isNewBuySignal and isBullish and isFilter1Uptrend
+startShortTrade = isNewSellSignal and isBearish and isFilter1Downtrend
 
 // Dynamic Exit Conditions: Booleans for ML Model Position Exits based on Fractal Filters and Kernel Regression Filters
 lastSignalWasBullish = ta.barssince(startLongTrade) < ta.barssince(startShortTrade)
@@ -532,7 +513,6 @@ endLongTrade = settings.useDynamicExits and isDynamicExitValid ? endLongTradeDyn
 endShortTrade = settings.useDynamicExits and isDynamicExitValid ? endShortTradeDynamic : endShortTradeStrict
 
 
-
 // =========================
 // ==== Plotting Labels ====
 // =========================
@@ -548,18 +528,18 @@ plotshape(endShortTrade and settings.showExits ? low : na, 'StopSell', shape.xcr
 // ================ 
 
 // Separate Alerts for Entries and Exits
-alertcondition(startLongTrade, title='Open Long ▲', message='LDC Open Long ▲ | {{ticker}}@{{close}} | ({{interval}})')
-alertcondition(endLongTrade, title='Close Long ▲', message='LDC Close Long ▲ | {{ticker}}@{{close}} | ({{interval}})')
-alertcondition(startShortTrade, title='Open Short ▼', message='LDC Open Short  | {{ticker}}@{{close}} | ({{interval}})')
-alertcondition(endShortTrade, title='Close Short ▼', message='LDC Close Short ▼ | {{ticker}}@{{close}} | ({{interval}})')
+alertcondition(startLongTrade, title='Open Long ?', message='LDC Open Long ? | {{ticker}}@{{close}} | ({{interval}})')
+alertcondition(endLongTrade, title='Close Long ?', message='LDC Close Long ? | {{ticker}}@{{close}} | ({{interval}})')
+alertcondition(startShortTrade, title='Open Short ?', message='LDC Open Short  | {{ticker}}@{{close}} | ({{interval}})')
+alertcondition(endShortTrade, title='Close Short ?', message='LDC Close Short ? | {{ticker}}@{{close}} | ({{interval}})')
 
 // Combined Alerts for Entries and Exits
-alertcondition(startShortTrade or startLongTrade, title='Open Position ▲▼', message='LDC Open Position ▲▼ | {{ticker}}@{{close}} | ({{interval}})')
-alertcondition(endShortTrade or endLongTrade, title='Close Position ▲▼', message='LDC Close Position  ▲▼ | {{ticker}}@[{{close}}] | ({{interval}})')
+alertcondition(startShortTrade or startLongTrade, title='Open Position ??', message='LDC Open Position ?? | {{ticker}}@{{close}} | ({{interval}})')
+alertcondition(endShortTrade or endLongTrade, title='Close Position ??', message='LDC Close Position  ?? | {{ticker}}@[{{close}}] | ({{interval}})')
 
 // Kernel Estimate Alerts
-alertcondition(condition=alertBullish, title='Kernel Bullish Color Change', message='LDC Kernel Bullish ▲ | {{ticker}}@{{close}} | ({{interval}})')
-alertcondition(condition=alertBearish, title='Kernel Bearish Color Change', message='LDC Kernel Bearish ▼ | {{ticker}}@{{close}} | ({{interval}})')
+alertcondition(condition=alertBullish, title='Kernel Bullish Color Change', message='LDC Kernel Bullish ? | {{ticker}}@{{close}} | ({{interval}})')
+alertcondition(condition=alertBearish, title='Kernel Bearish Color Change', message='LDC Kernel Bearish ? | {{ticker}}@{{close}} | ({{interval}})')
 
 // =========================
 // ==== Display Signals ==== 
@@ -611,3 +591,4 @@ if showTradeStats
     var tbl = ml.init_table()
     if barstate.islast
         update_table(tbl, tradeStatsHeader, totalTrades, totalWins, totalLosses, winLossRatio, winRate, totalEarlySignalFlips)
+
